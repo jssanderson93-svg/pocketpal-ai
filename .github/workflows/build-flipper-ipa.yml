@@ -112,6 +112,8 @@ jobs:
       - name: Build unsigned iPhone app
         working-directory: pocketpal
         shell: bash
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
         run: |
           set -euo pipefail
           set -o pipefail
