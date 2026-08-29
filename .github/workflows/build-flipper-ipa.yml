@@ -21,8 +21,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f control/pocketpal-flipper-bridge-bootstrap.zip
-          echo "841aae6058e12b0ea0565b04b5e97d2060789164e3bac9ac32a992e792df5559  control/pocketpal-flipper-bridge-bootstrap.zip" | shasum -a 256 -c -
+          test -f "control/pocketpal-C flipper-bridge-bootstrap.zip"
+          echo "841aae6058e12b0ea0565b04b5e97d2060789164e3bac9ac32a992e792df5559  control/pocketpal-C flipper-bridge-bootstrap.zip" | shasum -a 256 -c -
 
       - name: Checkout audited PocketPal base
         uses: actions/checkout@v4
@@ -38,7 +38,7 @@ jobs:
           rm -rf bootstrap
           mkdir bootstrap
 
-          unzip -q control/pocketpal-flipper-bridge-bootstrap.zip -d bootstrap
+          unzip -q "control/pocketpal-C flipper-bridge-bootstrap.zip" -d bootstrap
 
           test "$(cat bootstrap/pocketpal-flipper-phase1/BOOTSTRAP_REVISION.txt)" = "2"
 
