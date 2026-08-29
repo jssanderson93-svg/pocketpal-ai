@@ -69,9 +69,9 @@ jobs:
       - name: Run Flipper bridge tests
         working-directory: pocketpal
         run: |
-          yarn jest src/services/talents/__tests__/FlipperStatusEngine.test.ts --runInBand
-          yarn jest src/services/agent/__tests__/FlipperStatusAgentIntegration.test.ts --runInBand
-          yarn jest src/services/flipper/__tests__/FlipperDelimitedStream.test.ts --runInBand
+          yarn jest src/services/talents/__tests__/FlipperStatusEngine.test.ts --runInBand --coverage=false
+          yarn jest src/services/agent/__tests__/FlipperStatusAgentIntegration.test.ts --runInBand --coverage=false
+          yarn jest src/services/flipper/__tests__/FlipperDelimitedStream.test.ts --runInBand --coverage=false
 
       - name: Install CocoaPods dependencies
         working-directory: pocketpal/ios
