@@ -1,0 +1,124 @@
+name: Build PocketPal Flipper IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout control files
+        uses: actions/checkout@v4
+        with:
+          path: control
+
+      - name: Verify bootstrap package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f control/pocketpal-flipper-bridge-bootstrap.zip
+          echo "f13aedba602595ae4b94fdc14548e0704cc39abfbdde4707147fad7f4bb098ff  control/pocketpal-flipper-bridge-bootstrap.zip" | shasum -a 256 -c -
+
+      - name: Checkout audited PocketPal base
+        uses: actions/checkout@v4
+        with:
+          ref: ed680864adea0b090dac173b27675987c000fef2
+          path: pocketpal
+
+      - name: Apply Flipper bridge bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf bootstrap
+          mkdir bootstrap
+          unzip -q control/pocketpal-flipper-bridge-bootstrap.zip -d bootstrap
+          cd pocketpal
+          bash ../bootstrap/pocketpal-flipper-phase1/install-bootstrap.sh
+          git diff --check
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.21.0
+          cache: yarn
+          cache-dependency-path: pocketpal/yarn.lock
+
+      - name: Install Yarn
+        run: npm install --global yarn@1.22.22
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.2.3
+          bundler-cache: true
+          working-directory: pocketpal
+
+      - name: Install JavaScript dependencies
+        working-directory: pocketpal
+        run: yarn install --frozen-lockfile
+
+      - name: Typecheck
+        working-directory: pocketpal
+        run: yarn typecheck
+
+      - name: Run Flipper bridge tests
+        working-directory: pocketpal
+        run: |
+          yarn jest src/services/talents/__tests__/FlipperStatusEngine.test.ts --runInBand
+          yarn jest src/services/agent/__tests__/FlipperStatusAgentIntegration.test.ts --runInBand
+          yarn jest src/services/flipper/__tests__/FlipperDelimitedStream.test.ts --runInBand
+
+      - name: Install CocoaPods dependencies
+        working-directory: pocketpal/ios
+        run: bundle exec pod install
+
+      - name: Build unsigned iPhone app
+        working-directory: pocketpal
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          xcodebuild \
+            -workspace ios/PocketPal.xcworkspace \
+            -scheme PocketPal \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ios/build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build | tee xcodebuild.log
+
+      - name: Package unsigned IPA
+        working-directory: pocketpal
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$(find ios/build/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP"
+          rm -rf ipa Payload
+          mkdir -p Payload ipa
+          cp -R "$APP" Payload/
+          ditto -c -k --sequesterRsrc --keepParent Payload ipa/PocketPal-Flipper-unsigned.ipa
+          ls -lh ipa/PocketPal-Flipper-unsigned.ipa
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: PocketPal-Flipper-unsigned-IPA
+          path: pocketpal/ipa/PocketPal-Flipper-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PocketPal-Flipper-build-log
+          path: pocketpal/xcodebuild.log
+          if-no-files-found: ignore
