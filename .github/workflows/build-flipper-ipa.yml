@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f control/pocketpal-flipper-bridge-bootstrap.zip
-          echo "f13aedba602595ae4b94fdc14548e0704cc39abfbdde4707147fad7f4bb098ff  control/pocketpal-flipper-bridge-bootstrap.zip" | shasum -a 256 -c -
+          echo "841aae6058e12b0ea0565b04b5e97d2060789164e3bac9ac32a992e792df5559  control/pocketpal-flipper-bridge-bootstrap.zip" | shasum -a 256 -c -
 
       - name: Checkout audited PocketPal base
         uses: actions/checkout@v4
@@ -34,11 +34,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           rm -rf bootstrap
           mkdir bootstrap
+
           unzip -q control/pocketpal-flipper-bridge-bootstrap.zip -d bootstrap
+
+          test "$(cat bootstrap/pocketpal-flipper-phase1/BOOTSTRAP_REVISION.txt)" = "2"
+
           cd pocketpal
+
           bash ../bootstrap/pocketpal-flipper-phase1/install-bootstrap.sh
+
           git diff --check
 
       - name: Set up Node
@@ -73,6 +80,31 @@ jobs:
           yarn jest src/services/agent/__tests__/FlipperStatusAgentIntegration.test.ts --runInBand --coverage=false
           yarn jest src/services/flipper/__tests__/FlipperDelimitedStream.test.ts --runInBand --coverage=false
 
+      - name: Validate iOS configuration
+        working-directory: pocketpal
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f ios/Config/Env.xcconfig
+          test -f ios/GoogleService-Info.plist
+          test -f .env
+
+          grep -F "GOOGLE_WEB_CLIENT_ID = dummy-web-client-id.apps.googleusercontent.com" ios/Config/Env.xcconfig
+          grep -F "REVERSED_GOOGLE_IOS_CLIENT_ID = com.googleusercontent.apps.dummy-ios-client-id" ios/Config/Env.xcconfig
+
+          python3 - <<'PY'
+          import plistlib
+
+          for path in [
+              "ios/PocketPal/Info.plist",
+              "ios/GoogleService-Info.plist",
+          ]:
+              with open(path, "rb") as f:
+                  plistlib.load(f)
+              print(f"PLIST_VALID_OK: {path}")
+          PY
+
       - name: Install CocoaPods dependencies
         working-directory: pocketpal/ios
         run: bundle exec pod install
@@ -83,6 +115,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
+
           xcodebuild \
             -workspace ios/PocketPal.xcworkspace \
             -scheme PocketPal \
@@ -100,12 +133,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           APP="$(find ios/build/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+
           test -n "$APP"
+
           rm -rf ipa Payload
           mkdir -p Payload ipa
+
           cp -R "$APP" Payload/
-          ditto -c -k --sequesterRsrc --keepParent Payload ipa/PocketPal-Flipper-unsigned.ipa
+
+          ditto \
+            -c \
+            -k \
+            --sequesterRsrc \
+            --keepParent \
+            Payload \
+            ipa/PocketPal-Flipper-unsigned.ipa
+
           ls -lh ipa/PocketPal-Flipper-unsigned.ipa
 
       - name: Upload unsigned IPA
